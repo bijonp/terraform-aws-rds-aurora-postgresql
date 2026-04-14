@@ -1,115 +1,48 @@
 # RDS PostgreSQL Major Version Upgrade
 
-RDS PostgreSQL Major Version Upgrade
-This document describes mandatory checks and steps for performing a major version upgrade on AWS RDS PostgreSQL and Aurora PostgreSQL in production environments.
+### RDS / Aurora PostgreSQL Major Version Upgrade
+This document provides a clear, step-by-step checklist for performing a major version upgrade on AWS RDS PostgreSQL and Aurora PostgreSQL in production environments.
 
-Pre‑Upgrade Checks
-Check Supported Upgrade Path
-Verify that AWS supports upgrading from the current PostgreSQL version to the target version.
-Only AWS‑supported upgrade paths are allowed.
-Example command:
-aws rds describe-db-engine-versions --engine postgres --engine-version <current_version>
+### Pre-Upgrade Checks
+•	Verify that AWS supports upgrading from the current PostgreSQL version to the target version using AWS-supported paths only.
+•	Create new parameter groups for the target major version (do not reuse older parameter groups).
+•	For RDS PostgreSQL: Create a new DB Parameter Group (postgresXX).
+•	For Aurora PostgreSQL: Create a new Cluster Parameter Group and Instance Parameter Group (aurora-postgresqlXX).
+•	Confirm that the DB instance class is supported for the target PostgreSQL version.
+•	Ensure no prepared transactions exist (SELECT count(*) FROM pg_prepared_xacts; result must be 0).
+•	Verify no unsupported reg* data types are used (regproc, regprocedure, regoperator, etc.).
+•	Check for invalid databases and drop unused or invalid ones.
+•	For Aurora: Ensure no logical replication slots exist before upgrade.
+•	Verify all extensions are supported and upgraded to the latest compatible versions.
+•	Check for unknown or unsupported data types and resolve them.
 
-Check Parameter Group Compatibility
-Create new parameter groups before starting the upgrade.
-For RDS PostgreSQL
-Create a new DB Parameter Group for the target major version (postgresXX).
-For Aurora PostgreSQL
-Create a new Cluster Parameter Group (aurora-postgresqlXX).
-Create a new Instance Parameter Group (aurora-postgresqlXX).
-Never reuse parameter groups from an older major version.
+### Backup Requirement
 
-Check Instance Class Compatibility
-Confirm that the current DB instance class is supported for the target PostgreSQL version.
-If unsupported, change the instance class before upgrading the engine.
+A manual snapshot must be taken before starting the upgrade:
+•	RDS PostgreSQL – Take a DB snapshot
+•	Aurora PostgreSQL – Take a cluster snapshot
+Recommended snapshot name: pre-major-upgrade-<db-name>-<date>
 
-Check Prepared Transactions (Critical)
-Major version upgrades will fail if prepared transactions exist.
-Run:
-SELECT count(*) FROM pg_catalog.pg_prepared_xacts;
-The result must be 0.
-If transactions exist, identify them:
-SELECT gid, database, owner, prepared FROM pg_prepared_xacts;
-Resolution:
-Commit prepared transactions if valid.
-Roll back prepared transactions if stale.
-Always confirm with the application team before committing or rolling back.
+### Upgrade Execution Options
+•	In-place Upgrade – Requires downtime, simple execution, no instant rollback.
+•	Blue-Green Deployment – Recommended for production, minimal downtime, allows rollback.
 
-Check Unsupported reg* Data Types
-Major PostgreSQL upgrades do not support regproc, regprocedure, regoper, regoperator, regconfig, or regdictionary.
-Check all databases for usage of these data types.
-If found, convert columns to text or drop unused columns.
-Re‑run the check after fixing.
+### Post-Upgrade Validation
+•	Verify PostgreSQL engine version after upgrade.
+•	Confirm new parameter groups are attached.
+•	Validate installed extensions.
+•	Monitor CPU, memory, connections, and replication metrics.
+•	Perform application read/write and batch job validation.
 
-Check Invalid Databases
-Identify invalid databases using:
-SELECT datname FROM pg_database WHERE datconnlimit = -2;
-Drop invalid or unused databases before upgrading.
-
-Check Logical Replication Slots (Aurora Only)
-Aurora PostgreSQL upgrades cannot proceed if logical replication slots exist.
-Check:
-SELECT * FROM pg_replication_slots WHERE slot_type != 'physical';
-Drop unused logical replication slots before upgrade.
-
-Check Extensions
-List installed extensions:
-SELECT * FROM pg_extension;
-Upgrade extensions to the latest supported versions.
-Drop extensions that are not supported in the target major version.
-
-Check Unknown or Unsupported Data Types
-Run:
-SELECT DISTINCT data_type FROM information_schema.columns WHERE data_type ILIKE 'unknown';
-Fix or remove affected columns before proceeding.
-
-Backup Requirement
-Always take a manual snapshot before starting the upgrade.
-For RDS PostgreSQL
-Take a DB snapshot.
-For Aurora PostgreSQL
-Take a cluster snapshot.
-Recommended snapshot naming format:
-pre-major-upgrade--
-
-Upgrade Execution Options
-In‑Place Upgrade
-Requires downtime.
-Simple execution.
-No immediate rollback once started.
-Blue‑Green Deployment (Recommended for Production)
-Minimal or zero downtime.
-Allows application validation before cutover.
-Instant rollback option available.
-
-Post‑Upgrade Validation
-Verify PostgreSQL version:
-SHOW server_version;
-Verify parameter groups are updated and attached correctly.
-Validate extensions:
-SELECT * FROM pg_extension;
-Monitor database performance metrics:
-CPU utilization
-Freeable memory
-Database connections
-Replication lag
-Performance Insights
-Perform application sanity testing:
-Read operations
-Write operations
-Batch jobs
-Reporting queries
-CDC or replication if applicable
-
-Rollback Strategy
+### Rollback Strategy
 If issues occur after upgrade:
-Stop application traffic.
-Restore the pre‑upgrade snapshot.
-Reattach old parameter groups.
-Resume application traffic.
+1.	Stop application traffic.
+2.	Restore the pre-upgrade snapshot.
+3.	Reattach old parameter groups.
+4.	Resume application traffic.
 
-Important Notes
-Major version upgrades are irreversible.
-Always test the upgrade process in lower environments first.
-Parameter group mismatch is the most common cause of upgrade failure.
-Prepared transactions and logical replication slots are hard blockers.
+### Important Notes
+•	Major version upgrades are irreversible.
+•	Always test the upgrade process in lower environments first.
+•	Parameter group mismatch is the most common cause of failure.
+•	Prepared transactions and logical replication slots are hard blockers.
