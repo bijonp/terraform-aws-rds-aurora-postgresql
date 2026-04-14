@@ -1,9 +1,11 @@
- # Placeholder for RDS PostgreSQL Terraform configuration
+ # Example AWS RDS PostgreSQL configuration
+# Demonstrates production-style settings (HA, backups, maintenance)
+# This file does not contain real credential
 
 resource "aws_db_instance" "postgres" {
   identifier              = "example-postgres"
   engine                  = "postgres"
-  engine_version          = "15.17"
+  engine_version          = "15.17" # example version
   instance_class          = "db.t3.medium"
 
   allocated_storage       = 100
